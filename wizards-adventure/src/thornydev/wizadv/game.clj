@@ -92,7 +92,6 @@
 
 (defmacro pickup [object] (fpickup (keyword object)))
 
-
 (defn inventory []
   (->> (filter #(= :body (second %)) @object-locations)
        (map #(name (first %)))
@@ -114,7 +113,8 @@
     (eval sexp)
     "I do not know that command."))
 
-(game-eval (game-read))
+(comment
+  (game-eval (game-read)))
 
 (defn game-print [txt]
   (doseq [s (map str/trim (re-seq #"[^.?!]+[.?!]?" txt))]
