@@ -1,13 +1,10 @@
-(ns thornydev.wizadv.graphing
+(ns thornydev.graph.graphing
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
             [clojure.java.shell :refer [sh]]))
 
 (defn substitute-if [val predfn coll]
   (map #(if (predfn %) val %) coll))
-
-(comment (substitute-if 0 odd? [1 2 3 4 5 6 7 8]))
-(comment (substitute-if \e #(Character/isDigit %) "I'm a l33t hack3r!"))
 
 (defn dot-name [kw]
   (str/upper-case (str/replace (name kw) "-" "_")))
@@ -26,27 +23,20 @@
 
 (defn uedges->dot [edges]
   (let [mkpair (fn [e1 e2]
-                       (map name (sort [e1 e2])))]
+                 (map name (sort [e1 e2])))]
     (loop [nodes (keys edges) pairs-seen #{}]
       (if (empty? nodes)
         pairs-seen
         (let [start (first nodes)
               vpairs (for [[end vpath] (start edges)]
                        (let [pair (mkpair start end)]
-                         (do
-                           (when-not (pairs-seen pair)
-                             (print (dot-name start))
-                             (print "--")
+                         (when-not (pairs-seen pair)
+                           (print (dot-name start))
+                           (print "--")
                              (print (dot-name end))
                              (println (str "[label=\"" (dot-label vpath) "\"];")))
-                           pair)))]
-          (recur (rest nodes) (apply conj pairs-seen vpairs))
-          ))
-      ))
-  )
-
-(comment
-  (uedges->dot edges))
+                         pair))]
+          (recur (rest nodes) (apply conj pairs-seen vpairs)))))))
 
 (defn graph->dot [edges]
   (println "digraph {")
@@ -58,19 +48,29 @@
   (uedges->dot edges)
   (println "}"))
 
-(defn graph->svg [fname edges]
-  (with-open [w (io/writer fname)]
+(defn graph-it [m]
+  (with-open [w (io/writer (:fname m))]
     (binding [*out* w]
-      (graph->dot edges))
+      ((:dotfn m) (:edges m))
+      )
     )
-  (sh "dot" "-Tsvg" fname "-o" "wizout.svg"))
+  (sh "dot"
+      (str "-T" (name (:out-type m)))
+      (:fname m)
+      "-o" (str "wizout." (name (:out-type m))))
+  )
+
+(defn graph->svg [fname edges]
+  (let [args {:fname fname
+              :edges edges
+              :dotfn graph->dot
+              :out-type :svg}]
+    (graph-it args)))
 
 (defn ugraph->svg [fname edges]
-  (with-open [w (io/writer fname)]
-    (binding [*out* w]
-      (ugraph->dot edges))
-    )
-  (sh "dot" "-Tsvg" fname "-o" "uwizout.svg"))
+  (let [args {:fname fname
+              :edges edges
+              :dotfn ugraph->dot
+              :out-type :svg}]
+    (graph-it args)))
 
-(comment
-  (edges->dot edges))
