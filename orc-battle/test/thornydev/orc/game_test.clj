@@ -1,6 +1,7 @@
 (ns thornydev.orc.game-test
   (:use clojure.test
-        thornydev.orc.game))
+        thornydev.orc.game
+        thornydev.orc.monsters))
 
 (deftest test-player-dead?
   (testing "after player init"
@@ -8,27 +9,35 @@
     (is (not (player-dead?)))
     ))
 
-;; TODO: uncomment after define (init-monsters)
-;; (deftest test-get-monster-choice
-;;   (testing "after monster init"
-;;     (init-monsters)
-;;     (is (= '??? (get-monster-choice 3)))
-;;     (is (thrown? IllegalArgumentException (get-monster-choice -1)))
-;;     (is (thrown? IllegalArgumentException
-;;                  (get-monster-choice (inc *monster-num*))))
-;;     (is (thrown? IllegalArgumentException
-;;                  (get-monster-choice :put-dead-monster-here)))
-;;     ))
+(deftest test-get-monster-choice
+  (testing "after monster init"
+    (binding [*monster-num* 3]
+      (let [predef-mon [(atom (->Orc 10 10))
+                        (atom (->Brigand 0))
+                        (atom (->SlimeMold 3 4))]]
+        (binding [*monsters* predef-mon]
+          (is (= (->Orc 10 10) @(get-monster-choice 1)))
+          (is (= (->SlimeMold 3 4) @(get-monster-choice 3)))
+          (is (thrown? IllegalArgumentException (get-monster-choice -1)))
+          (is (thrown? IllegalArgumentException
+                       (get-monster-choice (inc *monster-num*))))
+          ;; this one is already dead, so throws exception
+          (is (thrown? IllegalArgumentException
+                       (get-monster-choice 2))))
+        )
+      )
+    )
+  )
 
 (deftest test-Orc
   (init-player)
 
   ;; use reader-form constructor notation
-  (let [orc #thornydev.orc.game.Orc{:health 8, :club-level 5}]
+  (let [orc #thornydev.orc.monsters.Orc{:health 8, :club-level 5}]
     (testing "show"
       (let [show-out (with-out-str (do-monster-show orc))]
         (is (re-find #"level 5 club" show-out))
-        (is (re-find #"8 health" show-out)))
+        )
       )
     (testing "attack"
       (let [b4-player-strength (:health @player)
@@ -36,7 +45,7 @@
             (with-out-str
               ;; should get back the same orc
               ;; (attacking doesn't change the orc)
-              (let [mon (monster-attack orc)]
+              (let [mon (monster-attack orc player)]
                 (is (= 8 (:health mon)))
                 (is (identical? orc mon))
                 ))
@@ -85,7 +94,7 @@
       (let [b4-plyr-strength (:health @player)
             attack-out
             (with-out-str
-              (let [mon (monster-attack hyd)]
+              (let [mon (monster-attack hyd player)]
                 ;; when the hydra attacks it gets one of its heads back
                 ;; so you get a new hydra back from this method
                 (is (not (identical? mon hyd)))
@@ -98,10 +107,46 @@
         (is (= (:health @player) (- b4-plyr-strength hit-int)))
         )
       )
+
     (testing "hit"
-      ;; LEFT OFF HERE ...
+      (with-out-str
+        (let [mon1 (monster-hit hyd (dec orig-health))
+              mon2 (monster-hit hyd orig-health)]
+          (is (= 1 (:health mon1)))
+          (is (not (monster-dead? mon1)))
+          (is (= 0 (:health mon2)))
+          (is (monster-dead? mon2))))
       )
-    )
-  )
+    ))
+
+
+(deftest test-monsters-dead?
+  (binding [*monster-builders* [new-Orc new-Hydra
+                                new-SlimeMold new-Brigand]]
+    (binding [*monster-num* 4]
+      (binding [*monsters* (create-random-monsters)]
+
+        (testing "all monsters with non-zero health"
+          (is (= 4 (count *monsters*)))
+          (is (not (monsters-dead? *monsters*))))
+
+        (testing "some monsters with non-zero health"
+          (binding [*monsters* (assoc (create-random-monsters) 0
+                                      (atom (->Hydra 0)))]
+            (is (monster-dead? @(first *monsters*)))
+            (is (not (monster-dead? @(second *monsters*))))
+            (is (not (monsters-dead? *monsters*)))
+            )
+          )
+        
+        (testing "all monsters with non-zero health = all dead"
+          (binding [*monsters* [(atom (->Hydra 0))
+                                (atom (->Brigand 0))
+                                (atom (->SlimeMold 0 0))
+                                (atom (->Orc 0 0))]]
+            (is (monster-dead? @(first *monsters*)))
+            (is (monster-dead? @(second *monsters*)))
+            (is (monsters-dead? *monsters*))))
+        ))))
 
 (prn (run-tests))
