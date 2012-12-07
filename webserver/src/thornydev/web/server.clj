@@ -101,6 +101,6 @@
 
 
 ;; TODO: have to figure out the socket stuff for this
-(defn serve [request-hander]
+(defn serve [request-handler]
   
   )
