@@ -41,13 +41,24 @@
                             first-move?
                             (attacking-moves board player spare-dice))))
 
-(defn add-passing-move [board player spare-dice first-move? moves]
+;; TODO: data all the things => something to try here?
+(defn add-passing-move
+  "@params
+    board - ???
+    player - integer (eg., 0 for white, 1 for black)
+    spare-dice - integer: number of dice WHERE??
+    first-move? - bool: whether is player's first move for this turn
+    moves - ??? (list?) of moves : probably attacking moves ???
+  @return ???"
+  [board player spare-dice first-move? moves]
   (if first-move?
     moves            ;; cannot pass on first-move, so return attack-moves
     (cons (list nil  ;; desc of the move => nil means "passing"
-                (game-tree (add-new-dice board player (dec spare-dice)))
-                )))
-  )
+                (game-tree (add-new-dice board player (dec spare-dice))
+                           (mod (inc player) *num-players*)  ;; change to next player
+                           0                                 ;; no spare dice
+                           true))                            ;; first-move
+          moves)))
 
 (comment
   (gen-board)
