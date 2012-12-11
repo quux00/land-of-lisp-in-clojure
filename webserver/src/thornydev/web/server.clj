@@ -1,6 +1,11 @@
 (ns thornydev.web.server
   (:require [clojure.string :as str]
-            [thornydev.clj-sockets :as sk]))
+            [thornydev.clj-sockets :as sk]
+            [server.socket :refer [create-server close-server]]
+            [thornydev.web.handlers :as hdlr])
+  ;; (:import (java.io BufferedReader InputStreamReader PrintWriter)
+  ;;          (java.util.concurrent CyclicBarrier))
+  )
 
 (defn rrest [coll]
   (rest (rest coll)))
@@ -107,22 +112,45 @@
 (defn close-all [& args]
   (doseq [closeable args] (.close closeable)))
 
+(def keep-running (atom true))
+
 (defn serve [request-handler]
-  (let [keep-running (atom true)]
-    (with-open [server (sk/socket-server 8080)]
-      (loop []
-        (with-open [socket  (sk/socket-accept server)
-                    sreader (sk/socket-reader socket)
-                    swriter (sk/socket-writer socket)]
-          (binding [*in* sreader
-                    *out* swriter]
-            (let [url    (parse-url (read-line))
-                  path   (first url)
-                  header (get-header)
-                  params (merge (first (rest url))
-                                (get-content-params header))]
-              (if (= "quit" path)
-                (reset! keep-running false)
-                (request-handler path header params)))))
-        (when @keep-running
-          (recur))))))
+  (with-open [server (sk/socket-server 8080)]
+    (while @keep-running
+      (with-open [socket  (sk/socket-accept server)
+                  sreader (sk/socket-reader socket)
+                  swriter (sk/socket-writer socket)]
+        (binding [*in* sreader
+                  *out* swriter]
+          (let [url    (parse-url (read-line))
+                path   (first url)
+                header (get-header)
+                params (merge (first (rest url))
+                              (get-content-params header))]
+            (if (= "quit" path)
+              (reset! keep-running false)
+              (request-handler path header params))))))))
+
+;; (def barrier (CyclicBarrier. 2))
+
+;; (defn http-server [in out]
+;;   (binding [*in*  (BufferedReader. (InputStreamReader. in))
+;;             *out* (PrintWriter. out)]
+;;     (let [url    (parse-url (read-line))
+;;           path   (first url)
+;;           header (get-header)
+;;           params (merge (first (rest url))
+;;                         (get-content-params header))]
+;;       (if (= "quit" path)
+;;         (reset! keep-running false)
+;;         (hdlr/hello-request-handler path header params))))
+;;   (.await barrier))
+
+;; (defn serv2 []
+;;   (while @keep-running
+;;     (let [socket-server (create-server 8080 http-server)]
+;;       (try
+;;         (.await barrier)
+;;         (finally
+;;           (close-server socket-server)
+;;           (.reset barrier))))))
