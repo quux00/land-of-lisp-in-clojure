@@ -75,13 +75,14 @@
 
 
 (defn get-header
-  "Reads the HTTP header in from the stream passed in
+  "Reads the HTTP header in from *in*, so that should
+   be bound to the socket stream reader
    @return map of key-values from the headers"
-  [sreader]
-  (loop [s (.readLine sreader) headers {}]
+  []
+  (loop [s (read-line) headers {}]
     (if-not (seq s)
       headers
-      (recur (.readLine sreader)
+      (recur (read-line)
              (->> (str/split s #":\s+")
                   (apply array-map)
                   (merge headers))))))
@@ -91,72 +92,37 @@
 ;;       how much to read
 (defn get-content-params
   "Parses HTTP encoded query params from the *body* of an HTTP request.
+   It reads the body from *in*, so make sure that is bound to the
+   socket stream reader before calling this fn.
    @params
-    header: the header map pulled from +stream+
-    sreader: reader from which the header has already been read/pulled
+    header: the header map pulled from HTTP request
    @return map of name-values from query string in the body or
            nil if no body found (or no Content-Length header present)"
-  [header sreader]
+  [header]
   (when-let [length (header "Content-Length")]
-    (parse-params (slurp sreader))))
+    (parse-params (slurp *in*))))
 
 ;; try with server.socket again: see this: http://angeleah.com/blog/2012/11/27/adding-conditions-to-the-clojure-echo-server.html
 
 (defn close-all [& args]
   (doseq [closeable args] (.close closeable)))
 
-(defn serv0 [request-handler]
-  (with-open [server (sk/socket-server 8080)]
-    (loop [count 2]
-      (when-not (<= count 0)
-        ;; TODO: change the first 3 to with-open
-        (let [socket (sk/socket-accept server)
-              sreader (sk/socket-reader socket)
-              swriter (sk/socket-writer socket)
-              url     (parse-url (.readLine sreader))
-              path    (first url)
-              header  (get-header sreader)
-              url-params (first (rest url))
-              body-params (get-content-params header sreader)
-              params  (merge (first (rest url)) (get-content-params header sreader))]
-          ;; (.println swriter
-          ;;           (format "<html><body>Hi there: %d<hr>%s<hr>%s<hr>%s</body></html>",
-          ;;                   count, path, header, params))
-          (binding [*out* swriter]
-            (request-handler path header params))
-          (close-all swriter sreader socket)
-          (recur (dec count))
-          )
-        )))
-  (println "ALL DONE"))
-
-;; TODO: have to figure out the socket stuff for this
-;; (defn serve [request-handler]
-;;   (with-open [server (sk/socket-server 8080)
-;;               socket (sk/socket-accept server)
-;;               sreader (sk/socket-reader socket)
-;;               swriter (sk/socket-writer socket)]   ;; TODO: could also try bindings *out* and *in* for the rdr/wtr
-;;     (println "doing the binding now")
-;;     (binding [*in*  sreader
-;;               *out* swriter]
-;;       (println "about to read-line")
-;;       (let 
-;;           path (first url)
-;;           header (get-header sreader)
-;;           params (merge (rest url) (get-content-params header sreader))
-;;         (request-handler path header params)))))
-
-;; Lisp version
-;; (defun serve (request-handler)
-;;   (let ((socket (socket-server 8080)))
-;;     (unwind-protect
-;;      (loop (with-open-stream (stream (socket-accept socket))
-;;              (let* ((url    (parse-url (read-line stream)))
-;;                     (path   (car url))
-;;                     (header (get-header stream))
-;;                     (params (append (cdr url) 
-;;                                     (get-content-params stream header)))
-;;                     (*standard-output* stream))
-;;                    (funcall request-handler path header params))))
-;;      (socket-server-close socket))))
-
+(defn serve [request-handler]
+  (let [keep-running (atom true)]
+    (with-open [server (sk/socket-server 8080)]
+      (loop []
+        (with-open [socket  (sk/socket-accept server)
+                    sreader (sk/socket-reader socket)
+                    swriter (sk/socket-writer socket)]
+          (binding [*in* sreader
+                    *out* swriter]
+            (let [url    (parse-url (read-line))
+                  path   (first url)
+                  header (get-header)
+                  params (merge (first (rest url))
+                                (get-content-params header))]
+              (if (= "quit" path)
+                (reset! keep-running false)
+                (request-handler path header params)))))
+        (when @keep-running
+          (recur))))))

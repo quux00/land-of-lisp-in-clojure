@@ -8,8 +8,8 @@
 
 (defn hello-request-handler [path mheader params]
   (if (re-find #"^greeting" path)
-    (if (mheader "name")
-      (println (html (body (str "Nice to meet you " (mheader "name")))))
+    (if (and params (params "name"))
+      (println (html (body (str "Nice to meet you " (params "name")))))
       (println (html (body "<form>What is your name? <input name='name' /></form>"))))
     (println (html (body "Sorry don't know that page")))))
 
