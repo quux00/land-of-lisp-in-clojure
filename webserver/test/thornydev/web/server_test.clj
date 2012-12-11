@@ -83,6 +83,6 @@
 ;; ---[ get-content-params ]--- ;;
 
 (let [strm (jio/reader (.getBytes "Content-Length: 9\n\na=b&abc=123"))]
-  (fact (get-content-params strm (get-header strm)) => {"a" "b", "abc" "123"}))
+  (fact (get-content-params (get-header strm) strm) => {"a" "b", "abc" "123"}))
 
 

@@ -6,7 +6,7 @@
 (defn body [s]
   (format "<body>%s</body>" s))
 
-(defn hello-request-handler [^String path mheader params]
+(defn hello-request-handler [path mheader params]
   (if (re-find #"^greeting" path)
     (if (mheader "name")
       (println (html (body (str "Nice to meet you " (mheader "name")))))
